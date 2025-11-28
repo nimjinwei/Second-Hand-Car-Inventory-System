@@ -4,7 +4,17 @@ import Papa from 'papaparse';
 import AdminPage from './pages/AdminPage';
 import InventoryPage from './pages/InventoryPage';
 import './App.css';
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
 
+const basename = process.env.PUBLIC_URL;
+
+ReactDOM.render(
+  <BrowserRouter basename={basename}>
+    <App />
+  </BrowserRouter>,
+  document.getElementById("root")
+);
 const initialVehicles = [
   {
     id: 1,
