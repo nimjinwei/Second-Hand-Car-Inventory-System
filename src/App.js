@@ -4,17 +4,7 @@ import Papa from 'papaparse';
 import AdminPage from './pages/AdminPage';
 import InventoryPage from './pages/InventoryPage';
 import './App.css';
-import { BrowserRouter } from "react-router-dom";
-import App from "./App";
 
-const basename = process.env.PUBLIC_URL;
-
-ReactDOM.render(
-  <BrowserRouter basename={basename}>
-    <App />
-  </BrowserRouter>,
-  document.getElementById("root")
-);
 const initialVehicles = [
   {
     id: 1,
@@ -97,6 +87,7 @@ const SHEET_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vQGcPm0Da6Wj8zpVMVOD79-2Wwoc2_03Ys1YkzgaVOBgrZVI89SyfDAcPbXonuhb63fJTK7r1U74oAA/pub?output=csv';
 
 function App() {
+  const basename = process.env.PUBLIC_URL || '/';
   const [vehicles, setVehicles] = useState(initialVehicles);
   const [loadingSheet, setLoadingSheet] = useState(false);
   const [sheetError, setSheetError] = useState('');
@@ -172,7 +163,7 @@ function App() {
   };
 
   return (
-    <Router>
+    <Router basename={basename}>
       <div className="app-shell">
         <nav className="top-nav">
           <div className="logo">UsedCar</div>
