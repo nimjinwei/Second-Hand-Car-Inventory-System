@@ -18,6 +18,18 @@ const processImageUrl = (rawUrl) => {
     return url;
   }
 
+  // 如果是常见的公开图床，直接返回原始 URL（不经代理）——有时代理会失败/被远端阻止
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const whitelist = ['images.pexels.com', 'images.unsplash.com', 'cdn.pixabay.com', 'i.imgur.com'];
+    if (whitelist.includes(host)) {
+      return url;
+    }
+  } catch (e) {
+    // ignore invalid URL, fall through to proxy
+  }
+
   // 如果是 Google Drive 的分享链接，尝试提取 fileId 并转换为可直接访问的 uc 链接
   try {
     const driveFileIdMatch = url.match(/(?:file\/d\/|id=)([a-zA-Z0-9_-]{10,})/);
