@@ -99,7 +99,14 @@ const SHEET_CSV_URL =
 
 function App() {
   const basename = process.env.PUBLIC_URL || '/';
-  const [vehicles, setVehicles] = useState(initialVehicles);
+  
+  // 对初始数据也应用代理处理
+  const processedInitialVehicles = initialVehicles.map(vehicle => ({
+    ...vehicle,
+    images: vehicle.images.map(processImageUrl)
+  }));
+  
+  const [vehicles, setVehicles] = useState(processedInitialVehicles);
   const [loadingSheet, setLoadingSheet] = useState(false);
   const [sheetError, setSheetError] = useState('');
 
