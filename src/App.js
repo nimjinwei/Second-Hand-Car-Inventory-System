@@ -1,10 +1,9 @@
 import { BrowserRouter as Router, Link, Route, Routes } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import Papa from 'papaparse';
 import AdminPage from './pages/AdminPage';
 import InventoryPage from './pages/InventoryPage';
 import './App.css';
-import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
 
 const initialVehicles = [
   {
@@ -83,98 +82,84 @@ const initialVehicles = [
   }
 ];
 
+const SHEET_CSV_URL =
+  process.env.REACT_APP_SHEET_CSV_URL ||
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQGcPm0Da6Wj8zpVMVOD79-2Wwoc2_03Ys1YkzgaVOBgrZVI89SyfDAcPbXonuhb63fJTK7r1U74oAA/pub?output=csv';
+
 function App() {
   const basename = process.env.PUBLIC_URL || '/';
   const [vehicles, setVehicles] = useState(initialVehicles);
-  const [loadingSheet, setLoadingSheet] = useState(true);
+  const [loadingSheet, setLoadingSheet] = useState(false);
   const [sheetError, setSheetError] = useState('');
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'vehicles'),
-      (snapshot) => {
-        const parsedVehicles = snapshot.docs.map((document) => {
-          const data = document.data();
-          return {
-            id: document.id,
-            brand: data.brand || '未命名品牌',
-            model: data.model || '',
-            year: Number(data.year) || 0,
-            price: Number(data.price) || 0,
-            mileage: Number(data.mileage) || 0,
-            fuelType: data.fuelType || '',
-            transmission: data.transmission || '',
-            location: data.location || '',
-            description: data.description || '',
-            images: Array.isArray(data.images)
-              ? data.images
-              : typeof data.images === 'string'
-                ? data.images.split(',').map((url) => url.trim()).filter(Boolean)
-                : [],
-            whatsapp: data.whatsapp || data.WhatsApp || ''
-          };
-        });
+    if (!SHEET_CSV_URL) return;
+    setLoadingSheet(true);
+    setSheetError('');
 
-        if (!parsedVehicles.length) {
-          setVehicles(initialVehicles);
-          setSheetError('Firestore 当前无数据，已展示示例库存。');
-        } else {
-          setVehicles(parsedVehicles);
-          setSheetError('');
+    fetch(SHEET_CSV_URL)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('无法读取 Google Sheet，请确认链接是否公开。');
         }
-        setLoadingSheet(false);
-      },
-      (error) => {
-        console.error(error);
-        setSheetError(error.message || '读取 Firestore 失败，请稍后重试。');
-        setLoadingSheet(false);
-      }
-    );
+        return response.text();
+      })
+      .then((csvText) => {
+        Papa.parse(csvText, {
+          header: true,
+          skipEmptyLines: true,
+          complete: ({ data, errors }) => {
+            if (errors.length) {
+              setSheetError('解析表格时出现问题，请检查字段格式。');
+              console.error(errors);
+              setLoadingSheet(false);
+              return;
+            }
+            const parsedVehicles = data
+              .map((row, index) => {
+                const images = row.Images
+                  ? row.Images.split(',').map((url) => url.trim()).filter(Boolean)
+                  : [];
+                return {
+                  id: row.Id || row.ID || `sheet-${index}`,
+                  brand: row.Brand || '未命名品牌',
+                  model: row.Model || '',
+                  year: Number(row.Year) || 0,
+                  price: Number(row.Price) || 0,
+                  mileage: Number(row.Mileage) || 0,
+                  fuelType: row.FuelType || '',
+                  transmission: row.Transmission || '',
+                  location: row.Location || '',
+                  description: row.Description || '',
+                  images,
+                  whatsapp: row.WhatsApp || row.Whatsapp || ''
+                };
+              })
+              .filter((vehicle) => vehicle.brand && vehicle.model);
 
-    return () => {
-      unsubscribe();
-    };
+            setVehicles(parsedVehicles);
+            setLoadingSheet(false);
+          }
+        });
+      })
+      .catch((error) => {
+        console.error(error);
+        setSheetError(error.message || '读取 Google Sheet 失败。');
+        setLoadingSheet(false);
+      });
   }, []);
 
-  const handleSaveVehicle = async (payload) => {
-    try {
-      const id = payload.id?.toString() || Date.now().toString();
-      const normalizedVehicle = {
-        ...payload,
-        id,
-        brand: payload.brand || '未命名品牌',
-        model: payload.model || '',
-        year: Number(payload.year) || 0,
-        price: Number(payload.price) || 0,
-        mileage: Number(payload.mileage) || 0,
-        fuelType: payload.fuelType || '',
-        transmission: payload.transmission || '',
-        location: payload.location || '',
-        description: payload.description || '',
-        images: Array.isArray(payload.images)
-          ? payload.images
-          : typeof payload.images === 'string'
-            ? payload.images.split(',').map((url) => url.trim()).filter(Boolean)
-            : [],
-        whatsapp: payload.whatsapp || ''
-      };
-
-      await setDoc(doc(db, 'vehicles', id), normalizedVehicle, { merge: true });
-      setSheetError('');
-    } catch (error) {
-      console.error(error);
-      setSheetError('保存车辆失败，请稍后重试。');
-    }
+  const handleSaveVehicle = (payload) => {
+    setVehicles((prev) => {
+      const exists = prev.some((vehicle) => vehicle.id === payload.id);
+      return exists
+        ? prev.map((vehicle) => (vehicle.id === payload.id ? payload : vehicle))
+        : [...prev, payload];
+    });
   };
 
-  const handleDeleteVehicle = async (id) => {
-    try {
-      await deleteDoc(doc(db, 'vehicles', id.toString()));
-      setSheetError('');
-    } catch (error) {
-      console.error(error);
-      setSheetError('删除车辆失败，请稍后重试。');
-    }
+  const handleDeleteVehicle = (id) => {
+    setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== id));
   };
 
   return (
