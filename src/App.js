@@ -5,6 +5,17 @@ import AdminPage from './pages/AdminPage';
 import InventoryPage from './pages/InventoryPage';
 import './App.css';
 
+// CORS 代理处理函数 - 使用免费的 CORS 代理解决图片加载问题
+const processImageUrl = (url) => {
+  if (!url) return '';
+  // 如果已经是代理 URL，直接返回
+  if (url.includes('images.weserv.nl') || url.includes('cors-anywhere')) {
+    return url;
+  }
+  // 使用 weserv.nl CORS 代理
+  return `https://images.weserv.nl/?url=${encodeURIComponent(url)}`;
+};
+
 const initialVehicles = [
   {
     id: 1,
@@ -118,7 +129,10 @@ function App() {
             const parsedVehicles = data
               .map((row, index) => {
                 const images = row.Images
-                  ? row.Images.split(',').map((url) => url.trim()).filter(Boolean)
+                  ? row.Images.split(',')
+                      .map((url) => url.trim())
+                      .filter(Boolean)
+                      .map(processImageUrl)  // 使用代理处理每个图片 URL
                   : [];
                 return {
                   id: row.Id || row.ID || `sheet-${index}`,
