@@ -171,7 +171,25 @@ function InventoryPage({ vehicles, loading = false, error = '' }) {
         )}
         {filteredVehicles.map((vehicle) => (
           <article key={vehicle.id} className="car-card">
-            <img src={vehicle.images[0]} alt={vehicle.model} />
+            <img
+              src={vehicle.images && vehicle.images[0]}
+              alt={vehicle.model}
+              onError={(e) => {
+                try {
+                  // 如果代理图失败，尝试回退到原始 URL（不经过代理）
+                  const idx = 0;
+                  const orig = vehicle._origImages && vehicle._origImages[idx];
+                  if (orig && e.target.src !== orig) {
+                    e.target.src = orig;
+                    return;
+                  }
+                  // 最后兜底：清除 src，显示空背景（浏览器会显示 broken image）
+                  e.target.removeAttribute('src');
+                } catch (err) {
+                  // ignore
+                }
+              }}
+            />
             <div className="card-body">
               <div className="card-head">
                 <h3>
@@ -216,7 +234,21 @@ function InventoryPage({ vehicles, loading = false, error = '' }) {
             <div className="modal-body">
               <div className="gallery">
                 {selectedVehicle.images.map((img, idx) => (
-                  <img key={idx} src={img} alt={`${selectedVehicle.model}-${idx}`} />
+                  <img
+                    key={idx}
+                    src={img}
+                    alt={`${selectedVehicle.model}-${idx}`}
+                    onError={(e) => {
+                      try {
+                        const orig = selectedVehicle._origImages && selectedVehicle._origImages[idx];
+                        if (orig && e.target.src !== orig) {
+                          e.target.src = orig;
+                          return;
+                        }
+                        e.target.removeAttribute('src');
+                      } catch (err) {}
+                    }}
+                  />
                 ))}
               </div>
               <div className="details">

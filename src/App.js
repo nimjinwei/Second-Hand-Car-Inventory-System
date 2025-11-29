@@ -6,13 +6,31 @@ import InventoryPage from './pages/InventoryPage';
 import './App.css';
 
 // CORS 代理处理函数 - 使用免费的 CORS 代理解决图片加载问题
-const processImageUrl = (url) => {
+const processImageUrl = (rawUrl) => {
+  if (!rawUrl) return '';
+
+  // 清理 URL：去掉外层的引号、尖括号、以及左右空白
+  let url = String(rawUrl).trim().replace(/^"|"$/g, '').replace(/^<|>$/g, '').trim();
   if (!url) return '';
-  // 如果已经是代理 URL，直接返回
+
+  // 已经是代理 URL，直接返回
   if (url.includes('images.weserv.nl') || url.includes('cors-anywhere')) {
     return url;
   }
-  // 使用 weserv.nl CORS 代理
+
+  // 如果是 Google Drive 的分享链接，尝试提取 fileId 并转换为可直接访问的 uc 链接
+  try {
+    const driveFileIdMatch = url.match(/(?:file\/d\/|id=)([a-zA-Z0-9_-]{10,})/);
+    if (url.includes('drive.google.com') && driveFileIdMatch && driveFileIdMatch[1]) {
+      const id = driveFileIdMatch[1];
+      const direct = `https://drive.google.com/uc?export=view&id=${id}`;
+      return `https://images.weserv.nl/?url=${encodeURIComponent(direct)}`;
+    }
+  } catch (e) {
+    // ignore and fallback to proxying the original URL
+  }
+
+  // 其他情况使用 weserv.nl CORS 代理（代理原始 URL）
   return `https://images.weserv.nl/?url=${encodeURIComponent(url)}`;
 };
 
@@ -103,9 +121,11 @@ function App() {
   // 对初始数据也应用代理处理
   const processedInitialVehicles = initialVehicles.map(vehicle => ({
     ...vehicle,
+    // 保存原始 images，供运行时回退尝试
+    _origImages: vehicle.images.map((u) => String(u).trim()),
     images: vehicle.images.map(processImageUrl)
   }));
-  
+
   const [vehicles, setVehicles] = useState(processedInitialVehicles);
   const [loadingSheet, setLoadingSheet] = useState(false);
   const [sheetError, setSheetError] = useState('');
@@ -133,14 +153,23 @@ function App() {
               setLoadingSheet(false);
               return;
             }
+            // 调试输出：打印前几行原始 CSV 数据，帮助确认 Images 列内容
+            console.log('Parsed sheet rows sample:', data.slice(0, 5));
             const parsedVehicles = data
               .map((row, index) => {
-                const images = row.Images
-                  ? row.Images.split(',')
-                      .map((url) => url.trim())
+                // 支持多种列名：Images / Image / image / images
+                const imagesCell =
+                  row.Images ?? row.Image ?? row.image ?? row.images ?? row.ImagesUrl ?? row['Image URL'] ?? '';
+                const origImages = imagesCell
+                  ? String(imagesCell)
+                      .split(',')
+                      .map((url) => String(url).trim())
                       .filter(Boolean)
-                      .map(processImageUrl)  // 使用代理处理每个图片 URL
                   : [];
+                const images = origImages.map(processImageUrl);
+                if (origImages.length === 0) {
+                  console.warn(`Row ${index} has no images in CSV (checked Images/Image columns).`);
+                }
                 return {
                   id: row.Id || row.ID || `sheet-${index}`,
                   brand: row.Brand || '未命名品牌',
@@ -153,12 +182,15 @@ function App() {
                   location: row.Location || '',
                   description: row.Description || '',
                   images,
+                  _origImages: origImages,
                   whatsapp: row.WhatsApp || row.Whatsapp || ''
                 };
               })
               .filter((vehicle) => vehicle.brand && vehicle.model);
 
             setVehicles(parsedVehicles);
+            // 调试输出：打印解析后的 vehicles 示例（含 images 字段）
+            console.log('Parsed vehicles sample:', parsedVehicles.slice(0, 5));
             setLoadingSheet(false);
           }
         });
