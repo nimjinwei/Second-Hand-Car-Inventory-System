@@ -263,7 +263,7 @@ function InventoryPage({ vehicles, loading = false, error = '' }) {
                 <ul className="specs">
                   <li>{selectedVehicle.fuelType}</li>
                   <li>{selectedVehicle.transmission}</li>
-                  <li>¥{selectedVehicle.price.toLocaleString()}</li>
+                  <li>RM{selectedVehicle.price.toLocaleString()}</li>
                 </ul>
                 <a
                   className="primary"
